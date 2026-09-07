@@ -11083,6 +11083,37 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private ArrayList<TLRPC.Dialog> botShareDialogs;
 
+    // ── Restricted two-chat UI ─────────────────────────────────────────────────
+    // Master switch for the restricted build: only the whitelisted chats below
+    // are rendered in the main (default) dialog list, and removed surfaces
+    // (search, new-chat, the "..." menu, main-tab swipes) are unreachable.
+    public static final boolean RESTRICT_UI_MODE = true;
+
+    // The only two chats shown in the main chat list. Replace these placeholder
+    // values with the real production chat IDs if they ever change.
+    public static final long ALLOWED_DIALOG_ID_1 = -1004311878336L;
+    public static final long ALLOWED_DIALOG_ID_2 = -1003964442323L;
+
+    private static boolean isAllowedDialogId(long dialogId) {
+        return dialogId == ALLOWED_DIALOG_ID_1 || dialogId == ALLOWED_DIALOG_ID_2;
+    }
+
+    // Copy-and-filter: lists returned by MessagesController are LIVE references
+    // shared with the rest of the app — never filter them in place.
+    private static ArrayList<TLRPC.Dialog> filterToAllowedDialogs(ArrayList<TLRPC.Dialog> dialogs) {
+        ArrayList<TLRPC.Dialog> filtered = new ArrayList<>();
+        if (dialogs != null) {
+            for (int i = 0; i < dialogs.size(); i++) {
+                TLRPC.Dialog dialog = dialogs.get(i);
+                if (isAllowedDialogId(dialog.id)) {
+                    filtered.add(dialog);
+                }
+            }
+        }
+        return filtered;
+    }
+    // ────────────────────────────────────────────────────────────────────────────
+
     @NonNull
     public ArrayList<TLRPC.Dialog> getDialogsArray(int currentAccount, int dialogsType, int folderId, boolean frozen) {
         if (frozen && frozenDialogsList != null) {
@@ -11090,6 +11121,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         }
         MessagesController messagesController = AccountInstance.getInstance(currentAccount).getMessagesController();
         if (dialogsType == DIALOGS_TYPE_DEFAULT) {
+            if (RESTRICT_UI_MODE) {
+                // Restricted UI: render only the two whitelisted chats.
+                return filterToAllowedDialogs(messagesController.getDialogs(folderId));
+            }
             return messagesController.getDialogs(folderId);
         } else if (dialogsType == DIALOGS_TYPE_WIDGET || dialogsType == DIALOGS_TYPE_IMPORT_HISTORY) {
             return messagesController.dialogsServerOnly;
