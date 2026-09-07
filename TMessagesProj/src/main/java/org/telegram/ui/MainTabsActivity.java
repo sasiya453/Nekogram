@@ -284,6 +284,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     private void checkContactsTabBadge() {
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: contacts tab removed; also avoids the contacts
+            // permission prompt side effect triggered from this path.
+            return;
+        }
         if (tabsView != null && tabs[INDEX_CONTACTS] != null) {
             final boolean hasPermission = Build.VERSION.SDK_INT >= 23 && ContactsController.hasContactsPermission();
             if (hasPermission) {
@@ -435,6 +440,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     public boolean openContactsSelector(View anchor) {
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: contacts surface removed (NewContact,
+            // VoipChatRecentCalls entries are inside this menu).
+            return false;
+        }
         if (getContext() == null || getParentActivity() == null) return false;
         final ItemOptions o = ItemOptions.makeOptions(this, anchor);
         o.add(R.drawable.msg_contact_add, getString(R.string.NewContact), () -> {
@@ -456,6 +466,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     public boolean openCallsSelector(View anchor) {
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: calls surface removed (GroupCallCreate2 and the
+            // show/hide-calls-tab entries are inside this menu).
+            return false;
+        }
         if (getContext() == null || getParentActivity() == null) return false;
         final ItemOptions o = ItemOptions.makeOptions(this, anchor);
         o.add(R.drawable.menu_call_create, getString(R.string.GroupCallCreate2), () -> CallLogActivity.openCreateCall(this));
@@ -484,6 +499,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private Integer pendingFolderId;
 
     private boolean openFoldersSelector(View anchor) {
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: folder switching / BackButtonMenuRecent (recent
+            // chats) would expose chats outside the whitelist.
+            return false;
+        }
         if (getContext() == null || getParentActivity() == null) return false;
         final ArrayList<MessagesController.DialogFilter> filters = getMessagesController().getDialogFilters();
         if (filters == null || filters.size() <= 1) {
@@ -636,6 +656,10 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     public boolean openAccountSelector(View button) {
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: account switching / AddAccount removed.
+            return false;
+        }
         ItemOptions o = ItemOptions.makeOptions(this, button);
         if (UserConfig.getActivatedAccountsCount() < UserConfig.MAX_ACCOUNT_COUNT) {
             o.add(R.drawable.msg_addbot, getString(R.string.AddAccount), () -> {
@@ -933,7 +957,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
         ViewGroup.MarginLayoutParams lp;
         {
-            final int height = navigationBarHeight + updateLayoutHeight + dp(NekoConfig.hideBottomNavigationBar ? 0 : DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS);
+            final int height = navigationBarHeight + updateLayoutHeight + dp(NekoConfig.hideBottomNavigationBar && !DialogsActivity.RESTRICT_UI_MODE ? 0 : DialogsActivity.MAIN_TABS_HEIGHT_WITH_MARGINS);
             lp = (ViewGroup.MarginLayoutParams) fadeView.getLayoutParams();
             if (lp.height != height) {
                 lp.height = height;
@@ -1086,7 +1110,9 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     }
 
     private void checkUi_tabsPosition() {
-        if (NekoConfig.hideBottomNavigationBar) {
+        if (NekoConfig.hideBottomNavigationBar && !DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: ignore the hide-bottom-bar setting so the tab bar
+            // (and therefore the Logout affordance) always stays reachable.
             tabsView.setVisibility(View.GONE);
             return;
         }
@@ -1204,6 +1230,7 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
     private boolean accountSwitchHintShown;
 
     private void showAccountChangeHint() {
+        if (DialogsActivity.RESTRICT_UI_MODE) return;
         if (accountSwitchHintShown || NekoConfig.hideBottomNavigationBar) return;
 
         if (accountSwitchHint == null && HintsController.Hint.AccountSwitchHint.show()) {
