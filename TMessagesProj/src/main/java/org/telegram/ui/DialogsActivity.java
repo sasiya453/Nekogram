@@ -3479,10 +3479,18 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
             optionsItem = menu.addItem(4, R.drawable.ic_ab_other);
             optionsItem.setContentDescription(LocaleController.getString(R.string.AccDescrMoreOptions));
             optionsItem.setOnClickListener(v -> {
+                if (RESTRICT_UI_MODE) {
+                    // Restricted UI: the "..." menu only exposes removed surfaces.
+                    return;
+                }
                 getContactsController().loadGlobalPrivacySetting();
                 showItemOptions();
             });
             optionsItem.setOnLongClickListener(v -> {
+                if (RESTRICT_UI_MODE) {
+                    // Restricted UI: defense-in-depth no-op.
+                    return true;
+                }
                 getContactsController().loadGlobalPrivacySetting();
                 showItemOptions();
                 return true;
@@ -4816,6 +4824,10 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         floatingButton3 = new FragmentFloatingButton(context, resourceProvider);
         contentView.addView(floatingButton3, FragmentFloatingButton.createDefaultLayoutParams());
         floatingButton3.setOnClickListener(v -> {
+            if (RESTRICT_UI_MODE && initialDialogsType == DIALOGS_TYPE_DEFAULT) {
+                // Restricted UI: new-chat compose removed. Defense-in-depth no-op.
+                return;
+            }
             if (parentLayout != null && parentLayout.isInPreviewMode()) {
                 finishPreviewFragment();
                 return;
@@ -8944,6 +8956,17 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     private void updateFloatingButtonVisibility(boolean animated) {
         final boolean isVisible = !(onlySelect && initialDialogsType != 10 || folderId != 0 || communityId != 0 || inPreviewMode || (searching && !onlySelect) || floatingButtonHidden);
+        if (RESTRICT_UI_MODE && initialDialogsType == DIALOGS_TYPE_DEFAULT) {
+            // Restricted UI: new-message compose FAB and the story FAB are
+            // removed surfaces. Force-hide at this recurring point too.
+            if (floatingButton3 != null) {
+                floatingButton3.setButtonVisible(false, animated);
+            }
+            if (floatingButtonStories != null) {
+                floatingButtonStories.setButtonVisible(false, animated);
+            }
+            return;
+        }
 
         if (floatingButton3 != null) {
             floatingButton3.setButtonVisible(isVisible, animated);
@@ -13725,6 +13748,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
 
     @Override
     public boolean canParentTabsSlide(MotionEvent ev, boolean forward) {
+        if (RESTRICT_UI_MODE) {
+            // Restricted UI: block horizontal swipes between the main tab pages,
+            // otherwise the hidden Contacts/Calls/Settings/Profile pages would
+            // still be reachable by gesture even with the tab bar reduced.
+            return false;
+        }
         if (searchIsShowed || rightSlidingDialogContainer != null && rightSlidingDialogContainer.hasFragment()) {
             return false;
         }
@@ -13751,6 +13780,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void showItemOptions() {
+        if (RESTRICT_UI_MODE) {
+            // Restricted UI: removed surface (profile/new group/contacts/calls/
+            // settings entries). Defense-in-depth no-op.
+            return;
+        }
         ItemOptions io = ItemOptions.makeOptions(this, optionsItem);
         io.setColors(getThemedColor(Theme.key_actionBarDefaultTitle), getThemedColor(Theme.key_actionBarDefaultTitle));
         io.setDimAlpha(0x08);
@@ -14244,6 +14278,12 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private void checkUi_itemOptionsVisibility() {
+        if (RESTRICT_UI_MODE) {
+            // Restricted UI: keep the "..." menu hidden at every recurring
+            // visibility recalculation (same class of bug as the search item).
+            FragmentFloatingButton.setAnimatedVisibility(optionsItem, 0);
+            return;
+        }
         final float factor1 = 1f - animatorSearchVisible.getFloatValue();
         final float factor2 = 1f - getRightSlidingProgress();
         final float factor3 = 1f - animatorDoneButtonVisible.getFloatValue();
