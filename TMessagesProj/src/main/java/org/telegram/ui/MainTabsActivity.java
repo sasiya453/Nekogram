@@ -55,6 +55,7 @@ import org.telegram.messenger.UserConfig;
 import org.telegram.messenger.UserObject;
 import org.telegram.tgnet.TLRPC;
 import org.telegram.ui.ActionBar.ActionBarMenuSubItem;
+import org.telegram.ui.ActionBar.AlertDialog;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.EdgeToEdgeSupportMode;
 import org.telegram.ui.ActionBar.Theme;
@@ -335,6 +336,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
             final int position = indexToPosition(index);
             tabs[index].setOnClickListener(v -> {
+                if (DialogsActivity.RESTRICT_UI_MODE && index != INDEX_CHATS) {
+                    // Restricted UI: only the Chats page is reachable.
+                    // Defense-in-depth no-op; the tab itself is hidden below.
+                    return;
+                }
                 if (viewPager.isManualScrolling() || viewPager.isTouch()) {
                     return;
                 }
@@ -352,9 +358,22 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             });
 
             tabsView.addView(tabs[index]);
-            tabsView.setViewVisible(view, true, false);
+            if (DialogsActivity.RESTRICT_UI_MODE && index != INDEX_CHATS) {
+                tabsView.setViewVisible(view, false, false);
+            } else {
+                tabsView.setViewVisible(view, true, false);
+            }
         }
         checkUi_callTabVisible(getUserConfig().showCallsTab, false);
+
+        if (DialogsActivity.RESTRICT_UI_MODE) {
+            // Restricted UI: logout affordance reuses the freed tab space.
+            logoutTab = GlassTabView.createMainTab(context, resourceProvider, GlassTabView.TabAnimation.LOGOUT, R.string.LogOut);
+            logoutTab.setOnClickListener(v -> showLogoutConfirmation());
+            tabsView.addView(logoutTab);
+            tabsView.setViewVisible(logoutTab, true, false);
+            tabsView.addTabToIgnoreClick(logoutTab);
+        }
 
         selectTab(viewPager.getCurrentPosition(), false);
 
@@ -830,6 +849,11 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     public GlassTabView[] tabs;
 
+    // Restricted UI: separate logout affordance shown in the freed tab space.
+    // Deliberately NOT part of tabs[] so pager mapping (indexToPosition),
+    // selectTab() and gesture overrides keep working unchanged.
+    private GlassTabView logoutTab;
+
     public void selectTab(int position, boolean animated) {
         for (int a = 0; a < tabs.length; a++) {
             GlassTabView tab = tabs[a];
@@ -1083,9 +1107,36 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
 
     private void checkUi_callTabVisible(boolean callTabsVisible, boolean animated) {
         if (tabsView != null) {
+            if (DialogsActivity.RESTRICT_UI_MODE) {
+                // Restricted UI: contacts/settings/calls/profile tabs are removed.
+                // This is the recurring visibility recalculation point (invoked
+                // from createView, callTabsVisibleToggled and openCallsSelector),
+                // so force-hide here rather than only once at creation time.
+                tabsView.setViewVisible(tabs[INDEX_CONTACTS], false, animated);
+                tabsView.setViewVisible(tabs[INDEX_SETTINGS], false, animated);
+                tabsView.setViewVisible(tabs[INDEX_CALLS], false, animated);
+                tabsView.setViewVisible(tabs[INDEX_PROFILE], false, animated);
+                return;
+            }
             tabsView.setViewVisible(tabs[INDEX_SETTINGS], !callTabsVisible, animated);
             tabsView.setViewVisible(tabs[INDEX_CALLS], callTabsVisible, animated);
         }
+    }
+
+    private void showLogoutConfirmation() {
+        if (getParentActivity() == null) {
+            return;
+        }
+        // Same confirmation-dialog pattern as LaunchActivity (AUTH_KEY_DROP
+        // handling): AlertDialog.Builder with a negative button, then the
+        // existing MessagesController.performLogout(2) call. No new logout
+        // logic is introduced here.
+        AlertDialog.Builder builder = new AlertDialog.Builder(getParentActivity(), getResourceProvider());
+        builder.setTitle(LocaleController.getString(R.string.LogOut));
+        builder.setMessage(LocaleController.getString(R.string.AreYouSureLogout));
+        builder.setPositiveButton(LocaleController.getString(R.string.LogOut), (dialog, which) -> MessagesController.getInstance(currentAccount).performLogout(2));
+        builder.setNegativeButton(LocaleController.getString(R.string.Cancel), null);
+        showDialog(builder.create());
     }
 
     @Override
@@ -1223,6 +1274,9 @@ public class MainTabsActivity extends ViewPagerActivity implements NotificationC
             for (GlassTabView tabView : tabs) {
                 tabView.updateColorsLottie();
             }
+        }
+        if (DialogsActivity.RESTRICT_UI_MODE && logoutTab != null) {
+            logoutTab.updateColorsLottie();
         }
     }
 
