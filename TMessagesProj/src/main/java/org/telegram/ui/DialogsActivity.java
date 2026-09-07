@@ -3253,6 +3253,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
         menu.setTranslationX(-dp(5));
         searchItem = menu.addItem(0, R.drawable.outline_header_search).setIsSearchField(true, false);
         searchItem.setOnClickListener(v -> {
+            if (RESTRICT_UI_MODE) {
+                // Restricted UI: search is removed. Defense-in-depth no-op —
+                // the item is also force-hidden via isSupportSearch() == false.
+                return;
+            }
             showSearch(true, false, true);
             fragmentSearchFieldWatcher.toggleSearch(true);
             AndroidUtilities.runOnUIThread(() -> {
@@ -14286,7 +14291,11 @@ public class DialogsActivity extends BaseFragment implements NotificationCenter.
     }
 
     private boolean isSupportSearch() {
-        return initialDialogsType != DIALOGS_TYPE_ADD_USERS_TO;
+        // Restricted UI: unconditionally disable search. This drives the
+        // recurring checkUi_itemSearchVisibility() calculation, which keeps
+        // the search item hidden even when visibility is recomputed later.
+        // Original: return initialDialogsType != DIALOGS_TYPE_ADD_USERS_TO;
+        return false;
     }
 
     public long getCommunityId() {
